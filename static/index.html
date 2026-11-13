@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STT API PhoWhisper</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#6b7280; --line:#e5e7eb;
+          --accent:#2563eb; --ok:#15803d; --err:#b91c1c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14161a; --card:#1d2026; --text:#e6e8ec; --muted:#9aa1ad; --line:#2d313a;
+            --accent:#60a5fa; --ok:#4ade80; --err:#f87171; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.6 system-ui, "Segoe UI", sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:0 0 10px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  label { font-weight:600; }
+  input[type=password], input[type=text] { flex:1; min-width:200px; padding:8px 10px; border:1px solid var(--line);
+          border-radius:8px; background:var(--bg); color:var(--text); font-size:15px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:9px 18px; font-size:15px; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); padding:6px 12px; font-size:14px; }
+  button:disabled { opacity:.5; cursor:wait; }
+  audio { width:100%; margin-top:12px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+  .stat { border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
+  .stat b { display:block; font-size:20px; }
+  .stat span { color:var(--muted); font-size:13px; }
+  .text { font-size:17px; white-space:pre-wrap; word-break:break-word; }
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:6px 8px; border-top:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; white-space:nowrap; }
+  /* Bảng lịch sử: cột số co gọn, cột File giới hạn, cột Chữ lấy hết phần còn lại */
+  #histTable td, #histTable th { white-space:nowrap; width:1%; }
+  #histTable td.col-file div { max-width:180px; overflow:hidden; text-overflow:ellipsis; }
+  #histTable .col-text { white-space:normal; width:auto; min-width:260px; }
+  /* Mặc định chỉ hiện 4 dòng; thêm class "open" để hiện hết */
+  .clamp { display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
+  .clamp.open { display:block; -webkit-line-clamp:unset; overflow:visible; }
+  .more { background:none; border:0; padding:2px 0 0; color:var(--accent); font-size:13px; cursor:pointer; }
+  .muted { color:var(--muted); }
+  .ok { color:var(--ok); }
+  .err { color:var(--err); }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--muted); margin-right:6px; }
+  .dot.ok { background:var(--ok); } .dot.err { background:var(--err); }
+</style>
+</head>
+<body>
+<main>
+  <h1>STT API — PhoWhisper</h1>
+  <p class="sub"><span class="dot" id="dot"></span><span id="health">Đang kiểm tra server...</span></p>
+
+  <div class="card">
+    <h2>1. API key</h2>
+    <div class="row">
+      <input type="password" id="key" placeholder="Dán API key vào đây" autocomplete="off">
+      <button class="ghost" id="toggle" type="button">Hiện</button>
+    </div>
+    <p class="muted" style="margin:8px 0 0;font-size:13px">
+      Key chỉ được giữ trong tab này, đóng tab là mất. Không gửi đi đâu ngoài server này.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>2. Chọn file audio</h2>
+    <div class="row">
+      <input type="file" id="file" accept="audio/*,.wav,.mp3,.flac,.ogg">
+      <button id="go">Nhận dạng</button>
+      <span id="status" class="muted"></span>
+    </div>
+    <p class="muted" id="fileinfo" style="margin:8px 0 0;font-size:13px">WAV, FLAC, OGG, MP3 · tối đa 5 phút / 60 MB</p>
+    <audio id="player" controls hidden></audio>
+  </div>
+
+  <div id="result" hidden>
+    <div class="card">
+      <h2>3. Kết quả</h2>
+      <div class="stats">
+        <div class="stat"><b id="dur"></b><span>độ dài audio</span></div>
+        <div class="stat"><b id="proc"></b><span>thời gian model xử lý</span></div>
+        <div class="stat"><b id="total"></b><span>tổng thời gian chờ (gồm gửi file)</span></div>
+        <div class="stat"><b id="speed"></b><span>nhanh hơn thời gian thực</span></div>
+        <div class="stat"><b id="words"></b><span>số từ</span></div>
+      </div>
+      <div class="row" style="justify-content:space-between;margin-bottom:6px">
+        <b>Chữ nhận dạng</b>
+        <button class="ghost" id="copy" type="button">Sao chép</button>
+      </div>
+      <div class="text" id="text"></div>
+    </div>
+  </div>
+
+  <div class="card" id="historyCard" hidden>
+    <div class="row" style="justify-content:space-between;margin-bottom:6px">
+      <h2 style="margin:0">Lịch sử trong phiên này</h2>
+      <button class="ghost" id="clear" type="button">Xóa</button>
+    </div>
+    <div class="table-wrap">
+      <table id="histTable">
+        <thead><tr><th>Lúc</th><th class="col-file">File</th><th>Audio</th><th>Xử lý</th><th>Tổng</th><th>Tốc độ</th><th class="col-text">Chữ</th></tr></thead>
+        <tbody id="history"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// Key giữ trong sessionStorage (mất khi đóng tab). Trình duyệt chặn storage thì vẫn chạy bình thường.
+try { $("key").value = sessionStorage.getItem("stt_key") || ""; } catch (e) {}
+$("key").oninput = () => { try { sessionStorage.setItem("stt_key", $("key").value.trim()); } catch (e) {} };
+$("toggle").onclick = () => {
+  const show = $("key").type === "password";
+  $("key").type = show ? "text" : "password";
+  $("toggle").textContent = show ? "Ẩn" : "Hiện";
+};
+
+// Trạng thái server
+fetch("health").then(r => r.json()).then(d => {
+  $("dot").className = "dot ok"; $("health").textContent = "Server đang chạy · " + d.device;
+}).catch(() => {
+  $("dot").className = "dot err"; $("health").textContent = "Không kết nối được server";
+});
+
+// Chọn file -> nghe lại + thông tin file
+$("file").onchange = () => {
+  const f = $("file").files[0];
+  if (!f) return;
+  $("player").src = URL.createObjectURL(f); $("player").hidden = false;
+  $("fileinfo").textContent = f.name + " · " + (f.size / 1024 / 1024).toFixed(2) + " MB";
+};
+
+function countWords(s) { return s.trim() ? s.trim().split(/\s+/).length : 0; }
+
+function addHistory(name, d, total) {
+  const tr = document.createElement("tr");
+  const cell = (v, cls) => {
+    const td = document.createElement("td");
+    if (cls) td.className = cls;
+    td.textContent = v;
+    tr.appendChild(td);
+    return td;
+  };
+  cell(new Date().toLocaleTimeString("vi-VN"));
+  const fileTd = cell("", "col-file");
+  const fileDiv = document.createElement("div");             // tên dài thì cắt "…", rê chuột xem đầy đủ
+  fileDiv.textContent = name;
+  fileTd.title = name;
+  fileTd.appendChild(fileDiv);
+  cell(d.audio_duration + " s");
+  cell(d.processing_time + " s");
+  cell(total.toFixed(2) + " s");
+  cell((d.audio_duration / Math.max(d.processing_time, 0.01)).toFixed(1) + "×");
+  const textTd = cell("", "col-text");
+  const textDiv = document.createElement("div");
+  textDiv.className = "clamp";
+  textDiv.textContent = d.text || "(không nhận ra chữ nào)";
+  const more = document.createElement("button");
+  more.className = "more"; more.type = "button"; more.textContent = "Xem thêm"; more.hidden = true;
+  more.onclick = () => {
+    const open = textDiv.classList.toggle("open");
+    more.textContent = open ? "Thu gọn" : "Xem thêm";
+  };
+  textTd.append(textDiv, more);
+
+  $("history").prepend(tr);
+  $("historyCard").hidden = false;
+  // Chỉ hiện nút khi chữ thực sự dài hơn 4 dòng (đo sau khi bảng đã hiện ra)
+  requestAnimationFrame(() => { more.hidden = textDiv.scrollHeight <= textDiv.clientHeight + 1; });
+}
+
+$("go").onclick = async () => {
+  const f = $("file").files[0];
+  const key = $("key").value.trim();
+  $("status").className = "err";
+  if (!key) { $("status").textContent = "Chưa nhập API key."; return; }
+  if (!f) { $("status").textContent = "Chưa chọn file."; return; }
+
+  $("go").disabled = true; $("status").className = "muted"; $("status").textContent = "Đang xử lý...";
+  const t0 = performance.now();
+  try {
+    const fd = new FormData(); fd.append("audio", f);
+    const r = await fetch("transcribe", { method: "POST", headers: { "X-API-Key": key }, body: fd });
+    let d;
+    try { d = await r.json(); } catch (e) { throw new Error("Lỗi " + r.status + " (server trả về dữ liệu lạ)"); }
+    if (!r.ok) throw new Error("Lỗi " + r.status + ": " + (d.detail || "không rõ"));
+    const total = (performance.now() - t0) / 1000;
+
+    $("dur").textContent = d.audio_duration + " s";
+    $("proc").textContent = d.processing_time + " s";
+    $("total").textContent = total.toFixed(2) + " s";
+    $("speed").textContent = (d.audio_duration / Math.max(d.processing_time, 0.01)).toFixed(1) + "×";
+    $("words").textContent = countWords(d.text);
+    $("text").textContent = d.text || "(không nhận ra chữ nào)";
+    $("result").hidden = false;
+    addHistory(f.name, d, total);
+    $("status").className = "ok"; $("status").textContent = "Xong";
+  } catch (e) {
+    $("status").className = "err"; $("status").textContent = e.message;
+  } finally { $("go").disabled = false; }
+};
+
+$("copy").onclick = async () => {
+  try { await navigator.clipboard.writeText($("text").textContent); $("copy").textContent = "Đã chép"; }
+  catch (e) { $("copy").textContent = "Không chép được"; }
+  setTimeout(() => { $("copy").textContent = "Sao chép"; }, 1500);
+};
+$("clear").onclick = () => { $("history").innerHTML = ""; $("historyCard").hidden = true; };
+</script>
+</body>
+</html>
