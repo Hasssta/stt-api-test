@@ -1,0 +1,13 @@
+# Chỉ cần khi CHUYỂN ĐỔI model (làm 1 lần), không cần để chạy API.
+#
+# Cài (torch bản CPU cho nhẹ, ~200 MB):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-convert.txt
+#
+# Chuyển đổi PhoWhisper-small sang CTranslate2 int8 (~250 MB):
+#   ct2-transformers-converter --model vinai/PhoWhisper-small --output_dir models/PhoWhisper-small-int8 \
+#       --quantization int8 --copy_files tokenizer.json preprocessor_config.json
+#
+# Sau khi chuyển đổi xong có thể gỡ torch/transformers đi.
+transformers
+ctranslate2

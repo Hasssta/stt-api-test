@@ -1,12 +1,9 @@
-# torch KHÔNG nằm trong file này (tránh lệch bản CUDA):
-#   - Colab: đã có sẵn torch.
-#   - Máy cá nhân có GPU NVIDIA: cài trước bằng
-#       pip install torch --index-url https://download.pytorch.org/whl/cu128
+# Thư viện để CHẠY API (thuần CPU, không cần torch/GPU).
+# Model phải chuyển đổi trước 1 lần — xem requirements-convert.txt.
 numpy
 fastapi
 uvicorn
 python-multipart   # FastAPI cần gói này để nhận file upload
-transformers
-accelerate
-soundfile
-librosa
+faster-whisper     # chạy PhoWhisper bằng CTranslate2 (int8 trên CPU)
+soundfile          # đọc WAV / FLAC / OGG / MP3
+soxr               # đổi tần số mẫu về 16 kHz

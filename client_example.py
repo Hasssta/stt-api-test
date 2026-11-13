@@ -16,7 +16,7 @@ def main():
     path = sys.argv[2]
 
     with open(path, "rb") as f:
-        r = requests.post(f"{server}/transcribe", files={"audio": (path, f, "audio/wav")}, timeout=90)
+        r = requests.post(f"{server}/transcribe", files={"audio": (path, f, "audio/wav")}, timeout=300)
 
     if r.ok:
         data = r.json()
