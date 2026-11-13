@@ -28,7 +28,8 @@ async def lifespan(app: FastAPI):
     # Chạy MỘT lần lúc khởi động. Server chỉ nhận request sau khi nạp xong model.
     print("Đang nạp PhoWhisper (lần đầu phải tải model khoảng 1 GB)...", flush=True)
     state["stt"] = STT()
-    print(f"Đã nạp PhoWhisper trên {state['stt'].device} trong {state['stt'].load_seconds}s.", flush=True)
+    stt = state["stt"]
+    print(f"Đã nạp PhoWhisper trên {stt.device} trong {stt.load_seconds}s, chạy thử {stt.warmup_seconds}s.", flush=True)
     yield
 
 

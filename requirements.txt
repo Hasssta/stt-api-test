@@ -1,4 +1,8 @@
-# torch đã có sẵn trên Colab, không cài lại (tránh lệch bản CUDA)
+# torch KHÔNG nằm trong file này (tránh lệch bản CUDA):
+#   - Colab: đã có sẵn torch.
+#   - Máy cá nhân có GPU NVIDIA: cài trước bằng
+#       pip install torch --index-url https://download.pytorch.org/whl/cu128
+numpy
 fastapi
 uvicorn
 python-multipart   # FastAPI cần gói này để nhận file upload

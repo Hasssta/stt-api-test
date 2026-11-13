@@ -5,6 +5,7 @@ Nạp model MỘT lần khi server khởi động, dùng lại cho mọi request
 import threading
 import time
 
+import librosa   # import ở đây (lúc khởi động), không import trong request -> request đầu không bị chậm
 import numpy as np
 import torch
 from transformers import pipeline
@@ -30,16 +31,24 @@ class STT:
         # Mỗi lúc GPU chỉ xử lý MỘT request -> nhiều người gửi cùng lúc thì xếp hàng, không bị hết VRAM.
         self._lock = threading.Lock()
 
+        # Chạy thử 1 lần với 2 giây im lặng ở 48 kHz: khởi động CUDA và bước đổi tần số của librosa.
+        # Không làm vậy thì người gọi đầu tiên phải chờ ~25 giây thay vì ~3 giây.
+        t0 = time.perf_counter()
+        self.transcribe(np.zeros(2 * 48000, dtype=np.float32), 48000)
+        self.warmup_seconds = round(time.perf_counter() - t0, 1)
+
     def transcribe(self, audio: np.ndarray, sr: int) -> str:
         if audio.ndim > 1:                 # stereo -> mono
             audio = audio.mean(axis=1)
         if sr != SAMPLE_RATE:              # chuyển về 16 kHz nếu file gửi lên khác
-            import librosa
             audio = librosa.resample(audio, orig_sr=sr, target_sr=SAMPLE_RATE)
         with self._lock:
             out = self.pipe(
                 {"raw": audio.astype(np.float32), "sampling_rate": SAMPLE_RATE},
                 chunk_length_s=30,         # cần cho đoạn dài hơn 30 giây
                 batch_size=4,
+                ignore_warning=True,       # tắt cảnh báo "chunk_length_s experimental" (đã thử trên Colab, chunking cho chữ tốt)
+                # Luôn nhận tiếng Việt: bỏ bước đoán ngôn ngữ (có thể đoán sai với đoạn ngắn/ồn)
+                generate_kwargs={"language": "vi", "task": "transcribe"},
             )
         return out["text"].strip()
