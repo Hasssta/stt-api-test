@@ -14,7 +14,9 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from stt import STT
 
-MAX_AUDIO_BYTES = 10 * 1024 * 1024   # 10 MB
+# WAV 48 kHz stereo 16-bit nặng ~11.5 MB/phút (32-bit gấp đôi) -> để 25 MB.
+# Giới hạn chính vẫn là độ dài MAX_AUDIO_SECONDS.
+MAX_AUDIO_BYTES = 25 * 1024 * 1024   # 25 MB
 MAX_AUDIO_SECONDS = 60
 MIN_AUDIO_SECONDS = 0.3
 
@@ -43,7 +45,7 @@ def transcribe(audio: UploadFile = File(...)):
     # Đọc tối đa MAX + 1 byte: file quá lớn thì dừng luôn, không nạp hết vào RAM.
     data = audio.file.read(MAX_AUDIO_BYTES + 1)
     if len(data) > MAX_AUDIO_BYTES:
-        raise HTTPException(413, "File quá lớn (tối đa 10 MB).")
+        raise HTTPException(413, f"File quá lớn (tối đa {MAX_AUDIO_BYTES // (1024 * 1024)} MB).")
     try:
         wav, sr = sf.read(io.BytesIO(data), dtype="float32")
     except Exception:
