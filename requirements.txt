@@ -4,6 +4,7 @@ numpy
 fastapi
 uvicorn
 python-multipart   # FastAPI cần gói này để nhận file upload
+python-dotenv      # đọc khóa bí mật từ file .env
 faster-whisper     # chạy PhoWhisper bằng CTranslate2 (int8 trên CPU)
 soundfile          # đọc WAV / FLAC / OGG / MP3
 soxr               # đổi tần số mẫu về 16 kHz
