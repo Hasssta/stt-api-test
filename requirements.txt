@@ -1,0 +1,8 @@
+# torch đã có sẵn trên Colab, không cài lại (tránh lệch bản CUDA)
+fastapi
+uvicorn
+python-multipart   # FastAPI cần gói này để nhận file upload
+transformers
+accelerate
+soundfile
+librosa

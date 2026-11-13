@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# Không đưa audio và model lên Git
+*.wav
+*.mp3
+*.safetensors
+*.bin
