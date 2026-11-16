@@ -1,0 +1,20 @@
+Mỗi lần dùng, mở 2 cửa sổ PowerShell
+
+Cửa sổ 1: server
+
+cd D:\Hasssta_Project\STT_API_test
+.\scripts\run_server.ps1
+
+
+Cửa sổ 2: tunnel, chạy sau khi cửa sổ 1 hiện Application startup complete:
+
+cd D:\Hasssta_Project\STT_API_test
+.\scripts\run_tunnel.ps1
+Cửa sổ 2 sẽ in dòng xanh ĐỊA CHỈ CÔNG KHAI: https://....trycloudflare.com. Địa chỉ này tự được chép vào clipboard, bạn chỉ cần dán gửi cho bạn bè. Muốn tắt thì bấm Ctrl+C ở từng cửa sổ.
+
+Script tự lo giúp bạn
+run_server.ps1: tự dùng Python trong .venv (không cần activate), tự đặt PYTHONUTF8=1. Đổi cổng bằng -Port 8001.
+run_tunnel.ps1:
+tự tìm cloudflared.exe trong D:\Hasssta_Project\_cache\cloudflared\;
+kiểm tra server đã chạy chưa, chưa chạy thì báo lỗi và dừng, không mở tunnel trỏ vào chỗ trống;
+chỉ in địa chỉ và lỗi, bỏ qua log thừa.

@@ -63,6 +63,16 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 Mở `.env`, dán chuỗi vừa in ra vào sau `STT_API_KEY=`. Key phải dài **ít nhất 16 ký tự**, nếu không server sẽ không khởi động.
 
+**Cấp key cho người khác:** mỗi người một key riêng, tạo bằng cùng lệnh trên, khai báo trong `.env`:
+
+```
+STT_API_KEYS=ban_a:key_cua_ban_a,ban_b:key_cua_ban_b
+```
+
+- Tên (`ban_a`) chỉ để ghi log: mỗi yêu cầu in ra dạng `[ban_a] 30.0s audio, xử lý 2.4s`.
+- Thu hồi quyền của ai: xóa mục của người đó rồi khởi động lại server. Key của người khác không bị ảnh hưởng.
+- Gửi key qua kênh riêng (tin nhắn riêng), không dán vào nhóm chung hay vào code.
+
 ## 5. Chạy server
 
 ```powershell
@@ -76,7 +86,9 @@ Khi thấy dòng `Đã nạp PhoWhisper trên cpu (...) ...` là server đã s�
 
 ## 6. Dùng thử
 
-**Trang web:** mở http://127.0.0.1:8000, nhập key, chọn file audio, bấm gửi.
+**Trang web:** mở http://127.0.0.1:8000, nhập key, chọn file audio (hoặc bấm **● Thu âm**, nói, bấm **■ Dừng**), bấm gửi.
+
+Thu âm: trình duyệt thu ra WebM/MP4, file [static/js/recorder.js](static/js/recorder.js) đổi sang **WAV 16 kHz mono** ngay trên trình duyệt rồi mới gửi, server không phải sửa gì. Mic chỉ bật được trên `http://localhost`/`127.0.0.1` hoặc trang `https` (ví dụ địa chỉ Cloudflare Tunnel), không bật được qua `http://<IP LAN>`. Web khác muốn có nút thu âm thì chép file này, cách dùng ghi ở đầu file.
 
 **Dòng lệnh** (máy khác cần cài `pip install requests`):
 
@@ -86,6 +98,35 @@ python client_example.py http://127.0.0.1:8000 duong_dan\file.wav
 ```
 
 **Tài liệu API tự sinh:** http://127.0.0.1:8000/docs
+
+### Lệnh nhanh (script có sẵn)
+
+Mở 2 cửa sổ PowerShell, cả hai đều `cd D:\Hasssta_Project\STT_API_test`:
+
+| Cửa sổ | Lệnh | Việc |
+|---|---|---|
+| 1 | `.\scripts\run_server.ps1` | Bật server ở `http://127.0.0.1:8000` (không cần activate `.venv`) |
+| 2 | `.\scripts\run_tunnel.ps1` | Mở tunnel, in địa chỉ công khai màu xanh và tự chép vào clipboard |
+
+Đổi cổng: thêm `-Port 8001` vào **cả hai** lệnh. Ctrl+C ở cửa sổ nào thì tắt cái đó.
+
+### Cho người ở nơi khác gọi (Cloudflare Tunnel)
+
+Tạo một địa chỉ `https://...trycloudflare.com` trỏ về server trên máy mình. Không cần mở cổng modem, không lộ IP nhà, không cần tài khoản Cloudflare.
+
+1. Tải `cloudflared-windows-amd64.exe` từ [trang phát hành chính thức](https://github.com/cloudflare/cloudflared/releases/latest), đổi tên thành `cloudflared.exe`, để ở ổ D (ví dụ `D:\Hasssta_Project\_cache\cloudflared\`).
+2. Bật server như mục 5 (giữ `--host 127.0.0.1`, tunnel chạy trên cùng máy).
+3. Mở cửa sổ khác, chạy:
+   ```powershell
+   D:\Hasssta_Project\_cache\cloudflared\cloudflared.exe tunnel --no-autoupdate --url http://127.0.0.1:8000
+   ```
+   Tìm dòng có `https://<chuoi-ngau-nhien>.trycloudflare.com`: đó là địa chỉ gửi cho người dùng.
+4. Cấp key riêng cho người đó (mục 4, `STT_API_KEYS`), gửi qua tin nhắn riêng.
+
+Lưu ý:
+- Chỉ dùng được khi máy **bật, không ngủ**, server và tunnel đều đang chạy. Ctrl+C ở cửa sổ tunnel là ngắt truy cập từ ngoài.
+- **Mỗi lần chạy lại tunnel, địa chỉ đổi**, phải gửi lại. Muốn địa chỉ cố định cần tài khoản Cloudflare và tên miền riêng.
+- Cloudflare cắt yêu cầu chờ quá khoảng 100 giây. Với giới hạn mặc định 5 phút audio (xử lý khoảng 30 giây) vẫn ổn.
 
 ## 7. Các endpoint
 
@@ -128,7 +169,8 @@ Ví dụ trên Ryzen 7 6800H: file 30 giây xử lý khoảng 3 giây, với m�
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
-| `STT_API_KEY` | *(bắt buộc)* | API key, ít nhất 16 ký tự |
+| `STT_API_KEY` | *(bắt buộc)* | API key của chủ server, ít nhất 16 ký tự |
+| `STT_API_KEYS` | *(trống)* | Key cấp cho người khác, dạng `ten:key,ten2:key2` |
 | `STT_MODEL_DIR` | `models/PhoWhisper-small-int8` | Thư mục model đã chuyển đổi |
 | `STT_CPU_THREADS` | số luồng logic / 2 | Số luồng CPU cho model |
 | `STT_MAX_SECONDS` | `300` | Độ dài audio tối đa (giây) |
@@ -206,6 +248,8 @@ static/
   index.html            trang thử API (chỉ có khung HTML)
   css/style.css         giao diện
   js/app.js             logic trang: gửi file, hiện kết quả, lịch sử
+  js/recorder.js        thu âm từ mic -> WAV 16 kHz mono (dùng lại được ở web khác)
+scripts/                run_server.ps1, run_tunnel.ps1: lệnh chạy nhanh
 bench/                  đo tốc độ, đo WER, trang demo từng khung
 loadtest/               test tải: Locust, tạo audio, ghi log CPU/RAM
   audio/, results/      file sinh ra khi chạy (không đưa lên Git)
