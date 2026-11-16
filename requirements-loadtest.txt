@@ -1,0 +1,4 @@
+# Chỉ cần trên MÁY CHẠY TEST TẢI (có thể khác máy chạy API).
+locust
+python-dotenv
+soundfile   # dùng cho loadtest/make_audio.py

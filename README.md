@@ -145,7 +145,30 @@ python bench/bench_faster_whisper.py duong_dan\file.wav models\PhoWhisper-small-
 
 # Trang thử hiện chữ từng khung 30 giây, mở http://127.0.0.1:8002
 python bench/demo_app.py
+
+# Đo độ chính xác (WER):
+#   1) tạo bản nháp .txt cạnh mỗi file audio (không ghi đè file .txt đã có)
+python bench/wer.py draft D:\Hasssta_Project\Audio_test "audio_*.wav"
+#   2) nghe lại, sửa từng file .txt cho đúng từng chữ
+#   3) so chữ model với bản chuẩn, in lỗi từng file và WER tổng
+python bench/wer.py score D:\Hasssta_Project\Audio_test "audio_*.wav"
 ```
+
+### Test tải (Locust)
+
+```powershell
+pip install -r requirements-loadtest.txt
+
+# Tạo bộ audio độ dài cố định: loadtest/audio/test_10s.wav, test_30s.wav, test_60s.wav
+python loadtest/make_audio.py D:\Hasssta_Project\Audio_test\VietComs1min.wav
+
+# Bật server ở một cửa sổ khác, rồi chạy: 10 người, file 30 giây, 3 phút, lưu CSV vào loadtest/results/
+$env:LOADTEST_LENGTH = "30"
+locust -f loadtest/locustfile.py --host http://127.0.0.1:8000 --headless `
+    -u 10 -r 2 -t 3m --csv loadtest/results/u10_30s
+```
+
+Mỗi người dùng ảo gửi một file, chờ kết quả, nghỉ 1–2 giây rồi gửi tiếp. Lỗi 503 (server bận) và 401 (sai key) được ghi riêng trong kết quả. Bỏ `--headless` để xem biểu đồ trực tiếp ở http://localhost:8089.
 
 ## 10. Cách xử lý audio dài
 

@@ -9,3 +9,6 @@ __pycache__/
 *.safetensors
 *.bin
 models/
+
+# Kết quả test tải (CSV, log) sinh ra mỗi lần chạy
+loadtest/results/
