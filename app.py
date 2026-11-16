@@ -29,9 +29,33 @@ INDEX_HTML = os.path.join(STATIC_DIR, "index.html")
 # Đọc file .env (nếu có) vào biến môi trường. Biến đã đặt sẵn trên máy thì được ưu tiên.
 load_dotenv()
 
-# Khóa bí mật: KHÔNG ghi vào code. Đặt trong file .env hoặc biến môi trường STT_API_KEY.
+# Khóa bí mật: KHÔNG ghi vào code. Đặt trong file .env hoặc biến môi trường.
+#   STT_API_KEY  = key của chủ server (bắt buộc)
+#   STT_API_KEYS = key cấp cho người khác, dạng "ten:key,ten2:key2" (tùy chọn).
+#                  Mỗi người một key -> lộ key của ai thì xóa riêng key đó; log ghi tên người gọi.
 API_KEY = os.environ.get("STT_API_KEY", "").strip()
 MIN_API_KEY_LENGTH = 16
+
+
+def parse_keys(owner_key: str, extra: str) -> dict[str, str]:
+    """Trả {tên: key}. Báo lỗi ngay lúc khởi động nếu khai báo sai, thay vì âm thầm bỏ qua."""
+    keys = {"owner": owner_key}
+    for item in filter(None, (s.strip() for s in extra.split(","))):
+        name, sep, key = item.partition(":")
+        name, key = name.strip(), key.strip()
+        if not sep or not name or not key:
+            raise RuntimeError(f"STT_API_KEYS sai định dạng ở mục thứ {len(keys)} (cần ten:key).")
+        if name in keys:
+            raise RuntimeError(f"STT_API_KEYS: tên '{name}' bị trùng.")
+        if len(key) < MIN_API_KEY_LENGTH:
+            raise RuntimeError(f"STT_API_KEYS: key của '{name}' cần ít nhất {MIN_API_KEY_LENGTH} ký tự.")
+        if key in keys.values():
+            raise RuntimeError(f"STT_API_KEYS: key của '{name}' trùng với một key khác.")
+        keys[name] = key
+    return keys
+
+
+API_KEYS: dict[str, str] = {}   # điền trong lifespan, sau khi kiểm tra hợp lệ
 
 # Đổi được bằng biến môi trường, không cần sửa code.
 # 5 phút: trên CPU xử lý ~20–35s, vẫn dưới giới hạn chờ ~100s của tunnel Cloudflare.
@@ -82,6 +106,9 @@ async def lifespan(app: FastAPI):
             f"Chưa đặt STT_API_KEY (cần ít nhất {MIN_API_KEY_LENGTH} ký tự). "
             "Chép .env.example thành .env rồi điền key vào."
         )
+    API_KEYS.update(parse_keys(API_KEY, os.environ.get("STT_API_KEYS", "")))
+    # Chỉ in TÊN, không bao giờ in key.
+    print(f"Có {len(API_KEYS)} API key: {', '.join(API_KEYS)}", flush=True)
     print("Đang nạp PhoWhisper (faster-whisper int8)...", flush=True)
     state["stt"] = STT()
     stt = state["stt"]
@@ -94,11 +121,19 @@ app = FastAPI(title="STT API test - PhoWhisper", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
-def require_api_key(x_api_key: str | None = Header(default=None)):
-    # compare_digest so sánh với thời gian cố định, không để lộ key qua thời gian phản hồi.
-    # Đổi sang bytes vì compare_digest không nhận chuỗi có ký tự ngoài ASCII.
-    if x_api_key is None or not secrets.compare_digest(x_api_key.encode(), API_KEY.encode()):
+def require_api_key(x_api_key: str | None = Header(default=None)) -> str:
+    """Trả tên chủ của key. compare_digest so sánh với thời gian cố định, không để lộ key
+    qua thời gian phản hồi; so với MỌI key (không dừng sớm) để không lộ key nào khớp.
+    Đổi sang bytes vì compare_digest không nhận chuỗi có ký tự ngoài ASCII."""
+    caller = None
+    if x_api_key is not None:
+        given = x_api_key.encode()
+        for name, key in API_KEYS.items():
+            if secrets.compare_digest(given, key.encode()):
+                caller = name
+    if caller is None:
         raise HTTPException(401, "Thiếu hoặc sai API key (gửi qua header X-API-Key).")
+    return caller
 
 
 @app.get("/", include_in_schema=False)
@@ -119,17 +154,20 @@ def health():
     }
 
 
-@app.post("/transcribe", dependencies=[Depends(require_api_key)])
-def transcribe(audio: UploadFile = File(...)):
+@app.post("/transcribe")
+def transcribe(audio: UploadFile = File(...), caller: str = Depends(require_api_key)):
     # Kiểm tra hàng đợi TRƯỚC khi đọc/giải mã file: lúc quá tải thì từ chối rẻ nhất có thể.
     if not admission.try_enter():
+        print(f"[{caller}] 503 hàng đợi đầy", flush=True)
         raise HTTPException(
             503,
             "Server đang bận, vui lòng thử lại sau ít giây.",
             headers={"Retry-After": "5"},
         )
     try:
-        return _transcribe(audio)
+        result = _transcribe(audio)
+        print(f"[{caller}] {result['audio_duration']}s audio, xử lý {result['processing_time']}s", flush=True)
+        return result
     finally:
         admission.leave()
 

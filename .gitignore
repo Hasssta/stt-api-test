@@ -12,3 +12,6 @@ models/
 
 # Kết quả test tải (CSV, log) sinh ra mỗi lần chạy
 loadtest/results/
+
+# Báo cáo so sánh model (bench/compare_models.py)
+bench/results/

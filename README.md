@@ -108,7 +108,7 @@ Mở 2 cửa sổ PowerShell, cả hai đều `cd D:\Hasssta_Project\STT_API_tes
 | 1 | `.\scripts\run_server.ps1` | Bật server ở `http://127.0.0.1:8000` (không cần activate `.venv`) |
 | 2 | `.\scripts\run_tunnel.ps1` | Mở tunnel, in địa chỉ công khai màu xanh và tự chép vào clipboard |
 
-Đổi cổng: thêm `-Port 8001` vào **cả hai** lệnh. Ctrl+C ở cửa sổ nào thì tắt cái đó.
+Đổi cổng: thêm `-Port 8001` vào **cả hai** lệnh. Chọn model: `.\scripts\run_server.ps1 -Model medium` (`small` | `medium`; medium chính xác hơn nhưng chậm hơn khoảng 3 lần, RAM khoảng 850 MB). Ctrl+C ở cửa sổ nào thì tắt cái đó.
 
 ### Cho người ở nơi khác gọi (Cloudflare Tunnel)
 
@@ -194,6 +194,10 @@ python bench/wer.py draft D:\Hasssta_Project\Audio_test "audio_*.wav"
 #   2) nghe lại, sửa từng file .txt cho đúng từng chữ
 #   3) so chữ model với bản chuẩn, in lỗi từng file và WER tổng
 python bench/wer.py score D:\Hasssta_Project\Audio_test "audio_*.wav"
+
+# So sánh model (tốc độ, RAM, chữ khác nhau; có .txt chuẩn thì tính cả WER).
+# Báo cáo lưu ở bench/results/compare_<giờ>.md
+python bench/compare_models.py D:\Hasssta_Project\Audio_test "Keo_tren_keo_duoi*.wav" --models small medium
 ```
 
 ### Test tải (Locust)

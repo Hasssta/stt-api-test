@@ -23,14 +23,20 @@
   </div>
 
   <div class="card">
-    <h2>2. Chọn file audio</h2>
+    <h2>2. Chọn file audio hoặc thu âm</h2>
     <div class="row">
       <input type="file" id="file" accept="audio/*,.wav,.mp3,.flac,.ogg">
-      <button id="go">Nhận dạng</button>
-      <span id="status" class="muted"></span>
+      <span class="muted">hoặc</span>
+      <button class="ghost" id="rec" type="button">● Thu âm</button>
+      <span id="recTime" class="rec-time" hidden>0:00</span>
     </div>
     <p class="muted" id="fileinfo" style="margin:8px 0 0;font-size:13px">WAV, FLAC, OGG, MP3 · tối đa 5 phút / 60 MB</p>
     <audio id="player" controls hidden></audio>
+    <div class="row" style="margin-top:12px">
+      <button id="go">Nhận dạng</button>
+      <label class="check"><input type="checkbox" id="autoGo" checked> Tự nhận dạng khi dừng thu</label>
+      <span id="status" class="muted"></span>
+    </div>
   </div>
 
   <div id="result" hidden>
@@ -65,6 +71,7 @@
   </div>
 </main>
 
+<script src="static/js/recorder.js"></script>
 <script src="static/js/app.js"></script>
 </body>
 </html>

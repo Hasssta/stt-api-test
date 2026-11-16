@@ -42,3 +42,7 @@ th { color:var(--muted); font-weight:600; white-space:nowrap; }
 .err { color:var(--err); }
 .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--muted); margin-right:6px; }
 .dot.ok { background:var(--ok); } .dot.err { background:var(--err); }
+/* Thu âm: nút đỏ khi đang thu, đồng hồ đếm giờ */
+button.ghost.rec-on { background:var(--err); color:#fff; border-color:var(--err); }
+.rec-time { color:var(--err); font-variant-numeric:tabular-nums; font-weight:600; }
+label.check { font-weight:400; font-size:14px; display:flex; gap:6px; align-items:center; }
