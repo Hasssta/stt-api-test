@@ -168,6 +168,21 @@ locust -f loadtest/locustfile.py --host http://127.0.0.1:8000 --headless `
     -u 10 -r 2 -t 3m --csv loadtest/results/u10_30s
 ```
 
+Ghi log CPU / RAM / hàng đợi của server, mỗi giây một dòng. Chạy ở cửa sổ thứ ba, **trên cùng máy với server**, bật trước khi chạy Locust:
+
+```powershell
+python loadtest/monitor.py --url http://127.0.0.1:8000 --out loadtest/results/u10_30s_monitor.csv
+```
+
+Bấm Ctrl+C để dừng (hoặc thêm `--duration 200`). Khi dừng, script in tóm tắt CPU trung bình / cao nhất, RAM cao nhất và hàng đợi dài nhất. Cột `cpu_server_pct` tính trên cả máy: 100% là dùng hết mọi luồng logic.
+
+**Chọn audio gửi đi:** ô **Audio** trên giao diện web (hoặc `--audio` khi chạy dòng lệnh) nhận:
+- đường dẫn một **file** (WAV/MP3/FLAC/OGG): mọi yêu cầu gửi file đó;
+- đường dẫn một **thư mục**: mỗi yêu cầu chọn ngẫu nhiên một file trong thư mục;
+- để mặc định: `loadtest/audio/test_<LOADTEST_LENGTH>s.wav`.
+
+Kết quả được thống kê riêng theo từng tên file.
+
 Mỗi người dùng ảo gửi một file, chờ kết quả, nghỉ 1–2 giây rồi gửi tiếp. Lỗi 503 (server bận) và 401 (sai key) được ghi riêng trong kết quả. Bỏ `--headless` để xem biểu đồ trực tiếp ở http://localhost:8089.
 
 ## 10. Cách xử lý audio dài
@@ -180,6 +195,22 @@ Cấu hình nhận dạng cố định trong `stt.py`: `language="vi"`, `beam_si
 
 - PhoWhisper gần như không nhận tiếng Anh. Từ tiếng Anh chèn trong câu tiếng Việt có thể bị sai (ví dụ "gym" thành "di").
 - Trên Windows, nếu chuyển log của server vào file (`uvicorn ... > server.log`) thì server lỗi khi in chữ tiếng Việt. Đặt `$env:PYTHONUTF8 = "1"` trước khi chạy.
+
+## 12. Cấu trúc thư mục
+
+```
+app.py                  API FastAPI (/, /health, /transcribe, /static/...)
+stt.py                  nạp model, chia khung 30 giây, nhận dạng
+client_example.py       ví dụ gọi API bằng Python
+static/
+  index.html            trang thử API (chỉ có khung HTML)
+  css/style.css         giao diện
+  js/app.js             logic trang: gửi file, hiện kết quả, lịch sử
+bench/                  đo tốc độ, đo WER, trang demo từng khung
+loadtest/               test tải: Locust, tạo audio, ghi log CPU/RAM
+  audio/, results/      file sinh ra khi chạy (không đưa lên Git)
+models/                 model đã chuyển đổi (không đưa lên Git)
+```
 
 ## Chạy trên Linux
 

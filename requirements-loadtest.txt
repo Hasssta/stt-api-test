@@ -2,3 +2,4 @@
 locust
 python-dotenv
 soundfile   # dùng cho loadtest/make_audio.py
+psutil      # dùng cho loadtest/monitor.py (phải chạy trên CÙNG máy với server)

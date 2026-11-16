@@ -19,10 +19,12 @@ import soundfile as sf
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from stt import STT
 
-INDEX_HTML = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html")
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+INDEX_HTML = os.path.join(STATIC_DIR, "index.html")
 
 # Đọc file .env (nếu có) vào biến môi trường. Biến đã đặt sẵn trên máy thì được ưu tiên.
 load_dotenv()
@@ -88,6 +90,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="STT API test - PhoWhisper", lifespan=lifespan)
+# CSS/JS của trang giao diện: static/css/, static/js/ -> phục vụ ở /static/... (không cần key)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)):
