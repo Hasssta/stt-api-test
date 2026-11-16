@@ -4,7 +4,7 @@ API chuyển giọng nói tiếng Việt thành chữ, dùng model [vinai/PhoWhi
 
 - Tốc độ đo trên AMD Ryzen 7 6800H, 8 luồng: khoảng **2,2–3,4 giây** cho 30 giây audio.
 - Chỉ trả chữ, không trả mốc thời gian (timestamp của PhoWhisper bị hỏng).
-- Mỗi lúc xử lý **một** yêu cầu; nhiều người gửi cùng lúc thì xếp hàng.
+- Mỗi lúc xử lý **một** yêu cầu; nhiều người gửi cùng lúc thì xếp hàng. Hàng đợi đầy thì trả lỗi **503** ngay.
 
 > Hướng dẫn dưới đây viết cho **Windows + PowerShell** (máy cá nhân). Trên Linux, xem mục [Chạy trên Linux](#chạy-trên-linux).
 
@@ -92,7 +92,7 @@ python client_example.py http://127.0.0.1:8000 duong_dan\file.wav
 | Đường dẫn | Cần key? | Mô tả |
 |---|---|---|
 | `GET /` | Không | Trang web thử API |
-| `GET /health` | Không | Trả `{"status": "ok", "device": "cpu (8 luồng, int8)"}` |
+| `GET /health` | Không | Trả `{"status": "ok", "device": "cpu (8 luồng, int8)", "in_queue": 0, "max_queue": 4}` |
 | `POST /transcribe` | **Có**, header `X-API-Key` | Gửi file audio ở trường `audio` (multipart/form-data) |
 
 Ví dụ kết quả `POST /transcribe`:
@@ -106,6 +106,19 @@ Ví dụ kết quả `POST /transcribe`:
 | 400 | Không đọc được file, audio ngắn hơn 0,3 giây hoặc dài hơn giới hạn |
 | 401 | Thiếu hoặc sai API key |
 | 413 | File vượt dung lượng tối đa |
+| 503 | Server đang bận (hàng đợi đầy). Có header `Retry-After: 5`, gửi lại sau vài giây |
+
+`in_queue` trong `/health` là số yêu cầu đang ở trong server (đang xử lý + đang chờ).
+
+### Hàng đợi
+
+Model xử lý một yêu cầu mỗi lúc. Server nhận tối đa **1 đang xử lý + `STT_MAX_QUEUE` đang chờ** (mặc định 1 + 4). Yêu cầu tiếp theo bị từ chối ngay bằng lỗi 503, thay vì phải chờ rất lâu rồi hết thời gian.
+
+Chọn `STT_MAX_QUEUE` theo độ dài audio và thời gian người dùng chịu chờ:
+
+> thời gian chờ tối đa ≈ (`STT_MAX_QUEUE` + 1) × thời gian xử lý một file
+
+Ví dụ trên Ryzen 7 6800H: file 30 giây xử lý khoảng 3 giây, với mặc định 4 thì người cuối hàng chờ khoảng 15 giây. File 5 phút xử lý khoảng 30 giây, khi đó nên giảm `STT_MAX_QUEUE`.
 
 Định dạng nhận: **WAV, FLAC, OGG, MP3**. Stereo và tần số mẫu khác 16 kHz được tự chuyển đổi. Nên gửi MP3 cho nhẹ: WAV 48 kHz stereo nặng khoảng 11,5 MB/phút, MP3 khoảng 1 MB/phút.
 
@@ -120,6 +133,7 @@ Ví dụ kết quả `POST /transcribe`:
 | `STT_CPU_THREADS` | số luồng logic / 2 | Số luồng CPU cho model |
 | `STT_MAX_SECONDS` | `300` | Độ dài audio tối đa (giây) |
 | `STT_MAX_MB` | `60` | Dung lượng file tối đa (MB) |
+| `STT_MAX_QUEUE` | `4` | Số yêu cầu được chờ ngoài yêu cầu đang xử lý; vượt quá thì trả 503 |
 
 Chọn `STT_CPU_THREADS`: đo bằng `bench/bench_faster_whisper.py`. Trên Ryzen 7 6800H (8 nhân / 16 luồng), 8 luồng nhanh nhất.
 
@@ -142,7 +156,7 @@ Cấu hình nhận dạng cố định trong `stt.py`: `language="vi"`, `beam_si
 ## 11. Giới hạn đã biết
 
 - PhoWhisper gần như không nhận tiếng Anh. Từ tiếng Anh chèn trong câu tiếng Việt có thể bị sai (ví dụ "gym" thành "di").
-- Chưa có hàng đợi giới hạn: khi quá tải, yêu cầu sẽ chờ thay vì bị từ chối ngay.
+- Trên Windows, nếu chuyển log của server vào file (`uvicorn ... > server.log`) thì server lỗi khi in chữ tiếng Việt. Đặt `$env:PYTHONUTF8 = "1"` trước khi chạy.
 
 ## Chạy trên Linux
 

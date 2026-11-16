@@ -3,13 +3,15 @@
   GET  /             -> trang giao diện (nhập key, chọn file, xem chữ)
   GET  /health       -> server còn sống không, model chạy trên thiết bị nào
   POST /transcribe   -> gửi 1 file audio (WAV, FLAC, OGG, MP3), nhận lại chữ
-                        (bắt buộc có header X-API-Key, sai/thiếu -> 401)
+                        (bắt buộc có header X-API-Key, sai/thiếu -> 401;
+                         hàng đợi đầy -> 503, đổi số chỗ chờ bằng STT_MAX_QUEUE)
 
 Chạy: uvicorn app:app --host 0.0.0.0 --port 8000
 """
 import io
 import os
 import secrets
+import threading
 import time
 from contextlib import asynccontextmanager
 
@@ -35,14 +37,44 @@ MAX_AUDIO_SECONDS = int(os.environ.get("STT_MAX_SECONDS", 300))
 # WAV 48 kHz stereo 16-bit nặng ~11.5 MB/phút -> 5 phút ~58 MB. Nên gửi MP3 (~1 MB/phút) cho nhẹ.
 MAX_AUDIO_BYTES = int(os.environ.get("STT_MAX_MB", 60)) * 1024 * 1024
 MIN_AUDIO_SECONDS = 0.3
+# Số request được XẾP HÀNG CHỜ (ngoài 1 request đang xử lý). Hàng đầy -> trả 503 ngay,
+# không để người gọi chờ mãi rồi hết thời gian. Mặc định 4: 30s audio xử lý ~3s nên người thứ 5
+# chờ ~15s; audio 5 phút (~30s/request) thì chờ tới ~150s -> nên giảm nếu audio dài.
+MAX_QUEUE = int(os.environ.get("STT_MAX_QUEUE", 4))
 
 state: dict = {}
+
+
+class Admission:
+    """Đếm số request đang ở trong server (đang xử lý + đang chờ), từ chối khi vượt giới hạn."""
+
+    def __init__(self, limit: int):
+        self.limit = limit
+        self.count = 0
+        self._lock = threading.Lock()
+
+    def try_enter(self) -> bool:
+        with self._lock:
+            if self.count >= self.limit:
+                return False
+            self.count += 1
+            return True
+
+    def leave(self):
+        with self._lock:
+            self.count -= 1
+
+
+# Model xử lý 1 request mỗi lúc (khóa trong stt.py) -> tối đa 1 đang chạy + MAX_QUEUE đang chờ.
+admission = Admission(1 + MAX_QUEUE)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Chạy MỘT lần lúc khởi động. Server chỉ nhận request sau khi nạp xong model.
     # Thiếu key thì không chạy, để không bao giờ vô tình mở API cho mọi người.
+    if MAX_QUEUE < 0:
+        raise RuntimeError("STT_MAX_QUEUE phải >= 0.")
     if len(API_KEY) < MIN_API_KEY_LENGTH:
         raise RuntimeError(
             f"Chưa đặt STT_API_KEY (cần ít nhất {MIN_API_KEY_LENGTH} ký tự). "
@@ -74,11 +106,31 @@ def index():
 @app.get("/health")
 def health():
     # Không cần key: chỉ để kiểm tra server còn sống, không lộ thông tin nhạy cảm.
-    return {"status": "ok", "device": state["stt"].device}
+    # in_queue: số request đang ở trong server (đang xử lý + đang chờ) -> tiện theo dõi khi test tải.
+    return {
+        "status": "ok",
+        "device": state["stt"].device,
+        "in_queue": admission.count,
+        "max_queue": MAX_QUEUE,
+    }
 
 
 @app.post("/transcribe", dependencies=[Depends(require_api_key)])
 def transcribe(audio: UploadFile = File(...)):
+    # Kiểm tra hàng đợi TRƯỚC khi đọc/giải mã file: lúc quá tải thì từ chối rẻ nhất có thể.
+    if not admission.try_enter():
+        raise HTTPException(
+            503,
+            "Server đang bận, vui lòng thử lại sau ít giây.",
+            headers={"Retry-After": "5"},
+        )
+    try:
+        return _transcribe(audio)
+    finally:
+        admission.leave()
+
+
+def _transcribe(audio: UploadFile) -> dict:
     # Đọc tối đa MAX + 1 byte: file quá lớn thì dừng luôn, không nạp hết vào RAM.
     data = audio.file.read(MAX_AUDIO_BYTES + 1)
     if len(data) > MAX_AUDIO_BYTES:
