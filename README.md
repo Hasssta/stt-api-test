@@ -176,6 +176,7 @@ Ví dụ trên Ryzen 7 6800H: file 30 giây xử lý khoảng 3 giây, với m�
 | `STT_MAX_SECONDS` | `300` | Độ dài audio tối đa (giây) |
 | `STT_MAX_MB` | `60` | Dung lượng file tối đa (MB) |
 | `STT_MAX_QUEUE` | `4` | Số yêu cầu được chờ ngoài yêu cầu đang xử lý; vượt quá thì trả 503 |
+| `STT_MIN_LOGPROB` | `-0.3` | Độ tự tin tối thiểu của chữ; thấp hơn thì coi là chữ bịa và bỏ (xem mục 10) |
 
 Chọn `STT_CPU_THREADS`: đo bằng `bench/bench_faster_whisper.py`. Trên Ryzen 7 6800H (8 nhân / 16 luồng), 8 luồng nhanh nhất.
 
@@ -237,8 +238,18 @@ Whisper xử lý theo khung 30 giây. Audio dài hơn được chia thành nhi�
 
 Cấu hình nhận dạng cố định trong `stt.py`: `language="vi"`, `beam_size=1`, `without_timestamps=True`.
 
+### Chống bịa chữ
+
+Đưa im lặng hoặc tiếng ồn vào, PhoWhisper vẫn trả về một câu nghe rất trơn tru (ví dụ 3 giây im lặng thành *"tuy nhiên không phải ai cũng có thể thực hiện điều này."*). Server lọc 2 lớp:
+
+1. **Trước khi gọi model:** khung nào chỉ toàn im lặng, hoặc nhiễu/tiếng ù có âm lượng gần như không đổi, thì bỏ qua. Tiếng nói thật có âm lượng lên xuống mạnh (đo được 25 đến 75 dB), còn nhiễu đều chỉ dao động khoảng 1 dB.
+2. **Sau khi model trả chữ:** bỏ đoạn có độ tự tin (`avg_logprob`) thấp hơn `STT_MIN_LOGPROB`. Trên 25 file thử (cả bản gốc lẫn bản giả lập điện thoại 8 kHz), chữ thật có độ tự tin từ −0,00 đến −0,12, chữ bịa từ −0,49 đến −0,92.
+
+Nếu không có tiếng nói, API trả `"text": ""`. Cờ `no_speech_prob` của Whisper không dùng được vì PhoWhisper luôn trả về 0.
+
 ## 11. Giới hạn đã biết
 
+- Ngưỡng chống bịa chữ mới được đo trên audio thử, chưa đo trên audio tổng đài thật. Nếu mất chữ thật thì hạ `STT_MIN_LOGPROB` (ví dụ −0,5).
 - PhoWhisper gần như không nhận tiếng Anh. Từ tiếng Anh chèn trong câu tiếng Việt có thể bị sai (ví dụ "gym" thành "di").
 - Trên Windows, nếu chuyển log của server vào file (`uvicorn ... > server.log`) thì server lỗi khi in chữ tiếng Việt. Đặt `$env:PYTHONUTF8 = "1"` trước khi chạy.
 
